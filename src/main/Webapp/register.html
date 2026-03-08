@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - 备忘录</title>
+    <link rel="stylesheet" href="css/register.css">
+    <style>
+        .page-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #FFFFFF;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            z-index: 9999;
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #8BC34A;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .page-loading p {
+            color: #8BC34A;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div v-if="!pageLoaded" class="page-loading">
+        <div class="loading-spinner"></div>
+        <p>加载中...</p>
+    </div>
+    <div v-show="pageLoaded">
+    <div class="form-div">
+        <h1 class="title">注册</h1>
+        
+        <div class="form-group">
+            <input v-model="registerForm.phone" type="text" id="phone" name="phone" placeholder="请输入手机号" autocomplete="tel">
+            <span class="err_msg" v-if="errors.phone">{{ errors.phone }}</span>
+        </div>
+
+        <div class="form-group code-group">
+            <input v-model="registerForm.code" type="text" id="code" name="code" placeholder="验证码" autocomplete="one-time-code">
+            <button @click="sendCode" type="button" class="send-code-btn" :disabled="countdown > 0">
+                {{ countdown > 0 ? countdown + 's' : '发送验证码' }}
+            </button>
+        </div>
+        <span class="err_msg code-err" v-if="errors.code">{{ errors.code }}</span>
+
+        <div class="form-group">
+            <input v-model="registerForm.password" type="password" id="password" name="password" placeholder="请输入密码(至少6位)" autocomplete="new-password">
+            <span class="err_msg" v-if="errors.password">{{ errors.password }}</span>
+        </div>
+
+        <div class="form-group">
+            <input v-model="registerForm.name" type="text" id="name" name="name" placeholder="请输入昵称" autocomplete="name">
+        </div>
+
+        <div class="buttons">
+            <button @click="handleRegister" class="register-btn">注册</button>
+        </div>
+
+        <div class="login-link">
+            <a href="login.html">已有账号?点击登录!</a>
+        </div>
+    </div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+<script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+<script>
+    const { createApp, ref, reactive, onMounted } = Vue;
+
+    createApp({
+        setup() {
+            const registerForm = reactive({
+                phone: '',
+                password: '',
+                name: '',
+                code: ''
+            });
+
+            const errors = reactive({
+                phone: '',
+                password: '',
+                code: ''
+            });
+
+            const countdown = ref(0);
+            const pageLoaded = ref(false);
+            let timer = null;
+
+            const sendCode = async () => {
+                errors.phone = '';
+                
+                if (!registerForm.phone || registerForm.phone.trim() === '') {
+                    errors.phone = '请输入手机号';
+                    return;
+                }
+                
+                if (!/^1[3-9]\d{9}$/.test(registerForm.phone)) {
+                    errors.phone = '手机号格式不正确';
+                    return;
+                }
+
+                try {
+                    const response = await axios.get('/login/code', {
+                        params: { phone: registerForm.phone }
+                    });
+                    
+                    if (response.data.success === true) {
+                        countdown.value = 60;
+                        timer = setInterval(() => {
+                            countdown.value--;
+                            if (countdown.value <= 0) {
+                                clearInterval(timer);
+                            }
+                        }, 1000);
+                    } else {
+                        errors.phone = response.data.errorMsg || '发送失败';
+                    }
+                } catch (error) {
+                    errors.phone = '发送失败，请重试';
+                }
+            };
+
+            const handleRegister = async () => {
+                errors.phone = '';
+                errors.password = '';
+                errors.code = '';
+
+                if (!registerForm.phone || !/^1[3-9]\d{9}$/.test(registerForm.phone)) {
+                    errors.phone = '请输入正确的手机号';
+                    return;
+                }
+
+                if (!registerForm.password || registerForm.password.length < 6) {
+                    errors.password = '密码至少6位';
+                    return;
+                }
+
+                if (!registerForm.code) {
+                    errors.code = '请输入验证码';
+                    return;
+                }
+
+                try {
+                    const params = new URLSearchParams();
+                    params.append('phone', registerForm.phone);
+                    params.append('password', registerForm.password);
+                    params.append('name', registerForm.name);
+                    params.append('code', registerForm.code);
+
+                    const response = await axios.post('/register', params);
+                    
+                    if (response.data.success === true) {
+                        alert('注册成功');
+                        window.location.href = 'login.html';
+                    } else {
+                        alert(response.data.errorMsg || '注册失败');
+                    }
+                } catch (error) {
+                    alert('注册请求失败');
+                }
+            };
+
+            onMounted(() => {
+                pageLoaded.value = true;
+            });
+
+            return {
+                registerForm,
+                errors,
+                countdown,
+                pageLoaded,
+                sendCode,
+                handleRegister
+            };
+        }
+    }).mount('#app');
+</script>
+</body>
+</html>

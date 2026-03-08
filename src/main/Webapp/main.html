@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <title>备忘录</title>
+    <link rel="stylesheet" href="css/main.css">
+</head>
+<body>
+    <div id="app">
+        <div class="top-settings">
+            <button class="setting-btn">设置</button>
+            <button class="logout-btn" @click="handleLogout">退出</button>
+        </div>
+        <transition name="toast">
+            <div v-if="toast.show" class="toast" :class="toast.type">
+                {{ toast.message }}
+            </div>
+        </transition>
+
+        <div v-if="!pageLoaded" class="page-loading">
+            <div class="loading-spinner"></div>
+            <p>加载中...</p>
+        </div>
+
+        <div class="app-container" v-show="pageLoaded">
+            <div class="header">
+            <div class="user-info">
+                <div class="avatar" @click="showAvatarUpload">
+                    <img :src="userAvatar" alt="头像">
+                    <div class="avatar-edit-icon">✎</div>
+                </div>
+                <div class="nickname">{{ userName || '用户昵称' }}</div>
+            </div>
+            </div>
+
+            <div class="memo-container">
+                <div class="memo-content-wrapper">
+                    <div class="memo-column" v-for="(column, colIndex) in columns" :key="colIndex">
+                        <div class="memo-card" v-for="memo in column" :key="memo.id" :class="{ completed: memo.completed }">
+                            <div class="completed-toggle" @click="toggleCompleted(memo)" :class="{ done: memo.completed }">
+                                <span v-if="memo.completed">✓</span>
+                            </div>
+                            <div class="memo-title">{{ memo.title }}</div>
+                            <div class="memo-content">{{ memo.content }}</div>
+                            <div class="memo-time">创建于 {{ formatTime(memo.createTime) }}</div>
+                            <div class="memo-actions" v-show="editMode">
+                                <button class="edit-btn" @click="openEditModal(memo)">编辑</button>
+                                <button class="delete-btn" @click="deleteMemo(memo.id)">删除</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fixed-buttons">
+                <div class="edit-mode-btn" @click="editMode = !editMode" :class="{ active: editMode }">
+                    <svg v-if="!editMode" xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                        <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                    </svg>
+                    <svg v-else xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+                <div class="add-memo-btn" @click="showAddModal = true">+</div>
+            </div>
+
+            <div v-if="isLoading" class="loading-indicator">
+                <div class="loading-spinner"></div>
+                <p>加载中...</p>
+            </div>
+
+            <div v-if="!hasMore && memos.length > 0" class="no-more-data">
+                <p>没有更多备忘录了</p>
+            </div>
+
+            <div v-if="showUpload" class="avatar-upload-modal">
+                <div class="avatar-upload-content">
+                    <div class="upload-header">
+                        <h3>修改头像</h3>
+                        <span class="close-btn" @click="showUpload = false">×</span>
+                    </div>
+                    <div class="upload-body">
+                        <div class="preview-avatar">
+                            <img :src="previewAvatar || userAvatar" alt="预览">
+                        </div>
+                        <input type="file" @change="handleFileChange" accept="image/*" id="avatarInput">
+                        <label for="avatarInput" class="select-btn">选择图片</label>
+                    </div>
+                    <div class="upload-footer">
+                        <button class="cancel-btn" @click="showUpload = false">取消</button>
+                        <button class="confirm-btn" @click="confirmUpload">确认</button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="showAddModal" class="avatar-upload-modal">
+                <div class="avatar-upload-content">
+                    <div class="upload-header">
+                        <h3>新建备忘录</h3>
+                        <span class="close-btn" @click="showAddModal = false">×</span>
+                    </div>
+                    <div class="upload-body">
+                        <div class="form-group">
+                            <input v-model="newMemo.title" type="text" placeholder="标题" class="memo-input">
+                        </div>
+                        <div class="form-group">
+                            <textarea v-model="newMemo.content" placeholder="内容" class="memo-textarea"></textarea>
+                        </div>
+                    </div>
+                    <div class="upload-footer">
+                        <button class="cancel-btn" @click="showAddModal = false">取消</button>
+                        <button class="confirm-btn" @click="addMemo">确认</button>
+                    </div>
+                </div>
+            </div>
+
+            <div v-if="showEditModal" class="avatar-upload-modal">
+                <div class="avatar-upload-content">
+                    <div class="upload-header">
+                        <h3>编辑备忘录</h3>
+                        <span class="close-btn" @click="showEditModal = false">×</span>
+                    </div>
+                    <div class="upload-body">
+                        <div class="form-group">
+                            <input v-model="editMemo.title" type="text" placeholder="标题" class="memo-input">
+                        </div>
+                        <div class="form-group">
+                            <textarea v-model="editMemo.content" placeholder="内容" class="memo-textarea"></textarea>
+                        </div>
+                    </div>
+                    <div class="upload-footer">
+                        <button class="cancel-btn" @click="showEditModal = false">取消</button>
+                        <button class="confirm-btn" @click="updateMemo">确认</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+    <script>
+        axios.interceptors.request.use(config => {
+            const token = localStorage.getItem('token');
+            if (token) {
+                config.headers['authorization'] = token;
+            }
+            return config;
+        });
+
+        axios.interceptors.response.use(
+            response => response,
+            error => {
+                if (error.response && error.response.status === 401) {
+                    localStorage.removeItem('token');
+                    sessionStorage.removeItem('user');
+                    showToast('登录已过期，请重新登录', 'error');
+                    setTimeout(() => {
+                        window.location.href = 'login.html';
+                    }, 1500);
+                }
+                return Promise.reject(error);
+            }
+        );
+
+        const { createApp, ref, computed, onMounted } = Vue;
+
+        createApp({
+            setup() {
+                const userName = ref('');
+                const userAvatar = ref('imgs/poko备忘录.jpg');
+                const showUpload = ref(false);
+                const showAddModal = ref(false);
+                const showEditModal = ref(false);
+                const editMode = ref(false);
+                const previewAvatar = ref('');
+                const selectedFile = ref(null);
+                const memos = ref([]);
+                const page = ref(1);
+                const isLoading = ref(false);
+                const hasMore = ref(true);
+                const userId = ref(null);
+                const pageLoaded = ref(false);
+
+                const columns = computed(() => {
+                    const sortedMemos = [...memos.value].sort((a, b) => {
+                        if (a.completed === b.completed) return 0;
+                        return a.completed ? 1 : -1;
+                    });
+                    const cols = [[], [], [], []];
+                    sortedMemos.forEach((memo, index) => {
+                        cols[index % 4].push(memo);
+                    });
+                    return cols;
+                });
+
+                const toast = ref({
+                    show: false,
+                    message: '',
+                    type: 'success'
+                });
+
+                const newMemo = ref({
+                    title: '',
+                    content: ''
+                });
+
+                const editMemo = ref({
+                    id: null,
+                    title: '',
+                    content: '',
+                    completed: false
+                });
+
+                const showToast = (message, type = 'success') => {
+                    toast.value = { show: true, message, type };
+                    setTimeout(() => {
+                        toast.value.show = false;
+                    }, 2000);
+                };
+
+                const showAvatarUpload = () => {
+                    showUpload.value = true;
+                };
+
+                const handleFileChange = (event) => {
+                    const file = event.target.files[0];
+                    if (file) {
+                        selectedFile.value = file;
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            previewAvatar.value = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                };
+
+                const confirmUpload = async () => {
+                    if (!selectedFile.value) {
+                        showToast('请先选择图片', 'error');
+                        return;
+                    }
+                    
+                    const formData = new FormData();
+                    formData.append('avatar', selectedFile.value);
+                    formData.append('id', userId.value);
+                    
+                    try {
+                        const response = await axios.post('/user/updateAvater', formData, {
+                            headers: {
+                                'Content-Type': 'multipart/form-data'
+                            }
+                        });
+                        
+                        if (response.data.success) {
+                            const newAvatarPath = '/upload/avatar/' + userId.value + '.jpg?t=' + Date.now();
+                            userAvatar.value = newAvatarPath;
+                            
+                            const user = JSON.parse(sessionStorage.getItem('user') || '{}');
+                            user.avatar = newAvatarPath;
+                            sessionStorage.setItem('user', JSON.stringify(user));
+                            
+                            showUpload.value = false;
+                            previewAvatar.value = '';
+                            selectedFile.value = null;
+                            showToast('头像更新成功');
+                        } else {
+                            showToast(response.data.errorMsg || '上传失败', 'error');
+                        }
+                    } catch (error) {
+                        showToast('上传失败', 'error');
+                    }
+                };
+
+                const handleLogout = async () => {
+                    if (confirm('确定要退出登录吗？')) {
+                        try {
+                            await axios.delete('/login/logout');
+                        } catch (error) {
+                            console.error('退出登录请求失败:', error);
+                        } finally {
+                            localStorage.removeItem('token');
+                            sessionStorage.removeItem('user');
+                            window.location.href = 'login.html';
+                        }
+                    }
+                };
+
+                const loadMoreMemos = async () => {
+                    if (isLoading.value || !hasMore.value) return;
+                    
+                    isLoading.value = true;
+                    
+                    try {
+                        const response = await axios.get('/memo/list', {
+                            params: {
+                                page: page.value,
+                                size: 12
+                            }
+                        });
+
+                        if (response.data.success) {
+                            const data = response.data.data;
+                            console.log('返回的数据:', data.rows);
+                            if (data.rows.length > 0) {
+                                console.log('第一条数据:', JSON.stringify(data.rows[0], null, 2));
+                                console.log('updateTime:', data.rows[0].updateTime);
+                                console.log('update_time:', data.rows[0].update_time);
+                            }
+                            memos.value = [...memos.value, ...data.rows];
+                            page.value++;
+                            
+                            if (data.rows.length < 12) {
+                                hasMore.value = false;
+                            }
+                            pageLoaded.value = true;
+                        } else {
+                            console.error('加载失败:', response.data.errorMsg);
+                        }
+                    } catch (error) {
+                        console.error('加载备忘录失败:', error);
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const addMemo = async () => {
+                    if (!newMemo.value.title.trim()) {
+                        showToast('请输入标题', 'error');
+                        return;
+                    }
+                    if (!newMemo.value.content.trim()) {
+                        showToast('请输入内容', 'error');
+                        return;
+                    }
+
+                    try {
+                        const params = new URLSearchParams();
+                        params.append('title', newMemo.value.title);
+                        params.append('content', newMemo.value.content);
+
+                        const response = await axios.post('/memo/create', params);
+
+                        if (response.data.success) {
+                            showToast('添加成功');
+                            showAddModal.value = false;
+                            newMemo.value = { title: '', content: '' };
+                            memos.value = [];
+                            page.value = 1;
+                            hasMore.value = true;
+                            loadMoreMemos();
+                        } else {
+                            showToast(response.data.errorMsg || '添加失败', 'error');
+                        }
+                    } catch (error) {
+                        console.error('添加请求失败:', error);
+                        showToast('添加请求失败', 'error');
+                    }
+                };
+
+                const openEditModal = (memo) => {
+                    editMemo.value = {
+                        id: memo.id,
+                        title: memo.title,
+                        content: memo.content,
+                        completed: memo.completed
+                    };
+                    showEditModal.value = true;
+                };
+
+                const updateMemo = async () => {
+                    if (!editMemo.value.title.trim()) {
+                        showToast('请输入标题', 'error');
+                        return;
+                    }
+                    if (!editMemo.value.content.trim()) {
+                        showToast('请输入内容', 'error');
+                        return;
+                    }
+
+                    try {
+                        const params = new URLSearchParams();
+                        params.append('id', editMemo.value.id);
+                        params.append('title', editMemo.value.title);
+                        params.append('content', editMemo.value.content);
+
+                        const response = await axios.post('/memo/updateContent', params);
+
+                        if (response.data.success) {
+                            showToast('更新成功');
+                            showEditModal.value = false;
+                            memos.value = [];
+                            page.value = 1;
+                            hasMore.value = true;
+                            loadMoreMemos();
+                        } else {
+                            showToast(response.data.errorMsg || '更新失败', 'error');
+                        }
+                    } catch (error) {
+                        console.error('更新请求失败:', error);
+                        showToast('更新请求失败', 'error');
+                    }
+                };
+
+                const deleteMemo = async (memoId) => {
+                    if (!confirm('确定要删除这条备忘录吗？')) {
+                        return;
+                    }
+
+                    try {
+                        const params = new URLSearchParams();
+                        params.append('id', memoId);
+
+                        const response = await axios.post('/memo/delete', params);
+
+                        if (response.data.success) {
+                            showToast('删除成功');
+                            memos.value = memos.value.filter(m => m.id !== memoId);
+                        } else {
+                            showToast(response.data.errorMsg || '删除失败', 'error');
+                        }
+                    } catch (error) {
+                        showToast('删除请求失败', 'error');
+                    }
+                };
+
+                const toggleCompleted = async (memo) => {
+                    try {
+                        const params = new URLSearchParams();
+                        params.append('id', memo.id);
+                        params.append('completed', !memo.completed);
+
+                        const response = await axios.post('/memo/updateCompleted', params);
+
+                        if (response.data.success) {
+                            memo.completed = !memo.completed;
+                            showToast(memo.completed ? '已完成' : '未完成');
+                        } else {
+                            showToast(response.data.errorMsg || '操作失败', 'error');
+                        }
+                    } catch (error) {
+                        showToast('操作失败', 'error');
+                    }
+                };
+
+                const handleScroll = () => {
+                    const scrollTop = document.documentElement.scrollTop || document.body.scrollTop;
+                    const scrollHeight = document.documentElement.scrollHeight || document.body.scrollHeight;
+                    const clientHeight = document.documentElement.clientHeight || window.innerHeight;
+                    
+                    if (scrollTop + clientHeight >= scrollHeight - 100) {
+                        loadMoreMemos();
+                    }
+                };
+
+                const formatTime = (timestamp) => {
+                    if (!timestamp) return '';
+                    const date = new Date(timestamp);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    const hours = String(date.getHours()).padStart(2, '0');
+                    const minutes = String(date.getMinutes()).padStart(2, '0');
+                    return `${year}-${month}-${day} ${hours}:${minutes}`;
+                };
+
+                onMounted(async () => {
+                    const token = localStorage.getItem('token');
+                    if (!token) {
+                        window.location.href = 'login.html';
+                        return;
+                    }
+                    
+                    let user = JSON.parse(sessionStorage.getItem('user') || '{}');
+                    
+                    if (!user.name) {
+                        try {
+                            const response = await axios.get('/user/me');
+                            if (response.data.success) {
+                                user = response.data.data;
+                                sessionStorage.setItem('user', JSON.stringify(user));
+                            } else {
+                                window.location.href = 'login.html';
+                                return;
+                            }
+                        } catch (error) {
+                            window.location.href = 'login.html';
+                            return;
+                        }
+                    }
+                    
+                    if (user.name) {
+                        userName.value = user.name;
+                    }
+                    if (user.avatar) {
+                        userAvatar.value = user.avatar;
+                    }
+                    if (user.id) {
+                        userId.value = user.id;
+                    }
+                    
+                    window.addEventListener('scroll', handleScroll);
+                    
+                    loadMoreMemos();
+                });
+
+                return {
+                    userName,
+                    userAvatar,
+                    showUpload,
+                    showAddModal,
+                    showEditModal,
+                    previewAvatar,
+                    memos,
+                    columns,
+                    isLoading,
+                    hasMore,
+                    newMemo,
+                    editMemo,
+                    toast,
+                    editMode,
+                    pageLoaded,
+                    showAvatarUpload,
+                    handleFileChange,
+                    confirmUpload,
+                    handleLogout,
+                    loadMoreMemos,
+                    addMemo,
+                    openEditModal,
+                    updateMemo,
+                    deleteMemo,
+                    toggleCompleted,
+                    formatTime
+                };
+            }
+        }).mount('#app');
+    </script>
+</body>
+</html>
