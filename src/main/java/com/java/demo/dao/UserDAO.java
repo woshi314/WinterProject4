@@ -25,7 +25,7 @@ public class UserDAO {
             pstmt = conn.prepareStatement(sql, java.sql.Statement.RETURN_GENERATED_KEYS);
             pstmt.setString(1, user.getPhone());
             pstmt.setString(2, user.getPassword());
-            pstmt.setString(3, user.getNickName());
+            pstmt.setString(3, user.getName());
             pstmt.setString(4, user.getAvatar());
             int count = pstmt.executeUpdate();
             if (count > 0) {
@@ -61,7 +61,7 @@ public class UserDAO {
                 user.setId(rs.getInt("id"));
                 user.setPhone(rs.getString("phone"));
                 user.setPassword(rs.getString("password"));
-                user.setNickName(rs.getString("nick_name"));
+                user.setName(rs.getString("nick_name"));
                 user.setAvatar(rs.getString("avatar"));
                 user.setCreateTime(rs.getTimestamp("create_time"));
             }
@@ -91,7 +91,7 @@ public class UserDAO {
                 user.setId(rs.getInt("id"));
                 user.setPhone(rs.getString("phone"));
                 user.setPassword(rs.getString("password"));
-                user.setNickName(rs.getString("nick_name"));
+                user.setName(rs.getString("nick_name"));
                 user.setAvatar(rs.getString("avatar"));
                 user.setCreateTime(rs.getTimestamp("create_time"));
             }

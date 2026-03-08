@@ -13,7 +13,7 @@ public class User {
     private Integer id;
     private String phone;
     private String password;
-    private String nickName;
+    private String name;
     private String avatar;
     private Date createTime;
 }

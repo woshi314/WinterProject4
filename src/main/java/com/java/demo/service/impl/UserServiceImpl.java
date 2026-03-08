@@ -26,8 +26,8 @@ public class UserServiceImpl implements IUserService {
             return Result.fail("手机号已被注册");
         }
 
-        if (user.getNickName() == null || user.getNickName().trim().isEmpty()) {
-            user.setNickName(user.getPhone());
+        if (user.getName() == null || user.getName().trim().isEmpty()) {
+            user.setName(user.getPhone());
         }
 
         int generatedId = userDAO.addUser(user);

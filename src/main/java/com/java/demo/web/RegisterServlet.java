@@ -44,7 +44,7 @@ public class RegisterServlet extends HttpServlet {
         User user = new User();
         user.setPhone(phone);
         user.setPassword(password);
-        user.setNickName(name);
+        user.setName(name);
 
         Result result = userService.addUser(user);
 
